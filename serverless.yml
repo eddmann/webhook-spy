@@ -1,0 +1,52 @@
+service: webhook-spy
+frameworkVersion: "3"
+
+custom:
+  tableName: ${self:service}-${opt:stage}
+  requestExpiryAfterDays: 1
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:PutItem
+          Resource:
+            - "Fn::GetAtt": [Table, Arn]
+  environment:
+    TABLE_NAME: ${self:custom.tableName}
+
+functions:
+  spy:
+    handler: spy.handler
+    url: true
+    environment:
+      REQUEST_EXPIRY_AFTER_DAYS: ${self:custom.requestExpiryAfterDays}
+  list:
+    handler: list.handler
+    url: true
+
+resources:
+  Resources:
+    Table:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableName}
+        AttributeDefinitions:
+          - AttributeName: PathName
+            AttributeType: S
+          - AttributeName: OccurredAt
+            AttributeType: N
+        KeySchema:
+          - AttributeName: PathName
+            KeyType: HASH
+          - AttributeName: OccurredAt
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: "ExpiresAt"
+          Enabled: true
+        BillingMode: PAY_PER_REQUEST
